@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô Phỏng Phản Xạ Ánh Sáng (Law of Reflection)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        canvas {
+            display: block;
+            outline: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(71, 85, 105, 1);
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col md:flex-row relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- UI Overlay Header -->
+    <header class="absolute top-4 left-4 right-4 z-10 pointer-events-none flex justify-between items-center">
+        <div class="glass-panel px-4 py-2.5 rounded-xl pointer-events-auto flex items-center space-x-3 shadow-lg">
+            <div class="p-2 bg-indigo-600 rounded-lg text-white">
+                <i class="fa-solid fa-bolt text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold text-white leading-tight">Thí Nghiệm Phản Xạ Ánh Sáng</h1>
+                <p class="text-xs text-slate-400">Vật Lý Quang Học 3D - Tia Sáng Nét Liền chuẩn SGK</p>
+            </div>
+        </div>
+
+        <div class="glass-panel px-3 py-1.5 rounded-xl pointer-events-auto text-xs text-slate-300 flex items-center gap-2 shadow">
+            <i class="fa-solid fa-rotate text-indigo-400"></i>
+            <span>Giữ chuột trái & kéo để xoay không gian 3D</span>
+        </div>
+    </header>
+
+    <!-- Sidebar Controls (Left) -->
+    <aside class="absolute left-4 top-20 bottom-4 w-80 z-10 glass-panel rounded-2xl p-4 overflow-y-auto flex flex-col gap-4 shadow-2xl pointer-events-auto">
+        
+        <!-- Angle Controls -->
+        <div class="flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+                <label for="angle-slider" class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-compass text-indigo-400"></i> Góc Tới (<span id="math-theta-i">i</span>):
+                </label>
+                <span id="angle-value" class="text-sm font-bold text-indigo-400 bg-indigo-950/60 px-2.5 py-0.5 rounded-md border border-indigo-500/30">45.0°</span>
+            </div>
+            <input type="range" id="angle-slider" min="0" max="85" step="0.5" value="45" 
+                class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+            <div class="flex justify-between text-[10px] text-slate-400 px-1">
+                <span>0° (Trùng pháp tuyến)</span>
+                <span>45°</span>
+                <span>85° (Phẳng)</span>
+            </div>
+        </div>
+
+        <!-- Light Color Selector -->
+        <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-palette text-pink-400"></i> Màu Tia Laser:
+            </label>
+            <div class="grid grid-cols-5 gap-2" id="color-picker-container">
+                <button data-color="#ff3333" class="color-btn h-8 rounded-lg bg-red-500 border-2 border-white shadow transition transform hover:scale-105"></button>
+                <button data-color="#33ff55" class="color-btn h-8 rounded-lg bg-green-500 border-2 border-transparent shadow transition transform hover:scale-105"></button>
+                <button data-color="#3399ff" class="color-btn h-8 rounded-lg bg-blue-500 border-2 border-transparent shadow transition transform hover:scale-105"></button>
+                <button data-color="#ffff33" class="color-btn h-8 rounded-lg bg-yellow-400 border-2 border-transparent shadow transition transform hover:scale-105"></button>
+                <button data-color="#ffffff" class="color-btn h-8 rounded-lg bg-white border-2 border-transparent shadow transition transform hover:scale-105"></button>
+            </div>
+        </div>
+
+        <!-- Reflection Mode -->
+        <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-emerald-400"></i> Bề Mặt Phản Xạ:
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btn-specular" class="py-2 px-2 text-xs font-medium rounded-lg bg-indigo-600 text-white border border-indigo-400 transition">
+                    Phản Xạ Gương
+                </button>
+                <button id="btn-diffuse" class="py-2 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 border border-slate-700 transition hover:bg-slate-700">
+                    Phản Xạ Tản Xạ
+                </button>
+            </div>
+        </div>
+
+        <!-- Ray Count -->
+        <div class="flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+                <label for="ray-count" class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-grip-lines text-amber-400"></i> Số Tia Ánh Sáng:
+                </label>
+                <span id="ray-count-val" class="text-xs font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded">1</span>
+            </div>
+            <input type="range" id="ray-count" min="1" max="7" step="2" value="1" 
+                class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+        </div>
+
+        <!-- Visual Toggles -->
+        <div class="flex flex-col gap-1.5 pt-2 border-t border-slate-700/60">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Hiển Thị Hệ Thống</label>
+            
+            <label class="flex items-center justify-between text-sm text-slate-300 cursor-pointer p-1.5 rounded-lg hover:bg-slate-800/50">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-arrows-up-down text-indigo-400 w-4"></i> Pháp Tuyến IN (Nét đứt)</span>
+                <input type="checkbox" id="chk-normal" checked class="w-4 h-4 accent-indigo-600 rounded">
+            </label>
+
+            <label class="flex items-center justify-between text-sm text-slate-300 cursor-pointer p-1.5 rounded-lg hover:bg-slate-800/50">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-font text-emerald-400 w-4"></i> Nhãn Ký Hiệu (S, I, R, N)</span>
+                <input type="checkbox" id="chk-labels" checked class="w-4 h-4 accent-indigo-600 rounded">
+            </label>
+
+            <label class="flex items-center justify-between text-sm text-slate-300 cursor-pointer p-1.5 rounded-lg hover:bg-slate-800/50">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-chart-pie text-indigo-300 w-4"></i> Cung Góc i & i'</span>
+                <input type="checkbox" id="chk-angles" checked class="w-4 h-4 accent-indigo-600 rounded">
+            </label>
+
+            <label class="flex items-center justify-between text-sm text-slate-300 cursor-pointer p-1.5 rounded-lg hover:bg-slate-800/50">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-compass text-amber-400 w-4"></i> Thước Đo Độ Trực Quan</span>
+                <input type="checkbox" id="chk-protractor" checked class="w-4 h-4 accent-indigo-600 rounded">
+            </label>
+        </div>
+
+        <!-- Physics Law Card -->
+        <div class="mt-auto bg-slate-900/90 rounded-xl p-3 border border-indigo-500/20 text-xs flex flex-col gap-2">
+            <div class="font-bold text-indigo-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-book-open"></i> Định Luật Phản Xạ Ánh Sáng
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">
+                • <b>SI</b>: Tia sáng tới &nbsp;|&nbsp; <b>IR</b>: Tia sáng phản xạ<br>
+                • <b>IN</b>: Pháp tuyến vuông góc với mặt gương tại điểm tới <b>I</b><br>
+                • Góc tới $\widehat{SIN} = i$ &nbsp;|&nbsp; Góc phản xạ $\widehat{NIR} = i'$
+            </p>
+            <div class="bg-indigo-950/60 p-2 rounded-lg text-center font-bold text-indigo-200 border border-indigo-800/40">
+                $i = i'$ (Góc tới = Góc phản xạ)
+            </div>
+            <div class="pt-1 flex flex-col gap-1 text-[11px]">
+                <div class="flex items-center justify-between bg-indigo-950/40 px-2 py-1 rounded border border-indigo-500/30">
+                    <span class="flex items-center gap-1 text-indigo-300 font-medium">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> Góc tới $i = \widehat{SIN}$:
+                    </span>
+                    <strong class="text-indigo-200 text-xs" id="info-i">45.0°</strong>
+                </div>
+                <div class="flex items-center justify-between bg-emerald-950/40 px-2 py-1 rounded border border-emerald-500/30">
+                    <span class="flex items-center gap-1 text-emerald-300 font-medium">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Góc phản xạ $i' = \widehat{NIR}$:
+                    </span>
+                    <strong class="text-emerald-200 text-xs" id="info-r">45.0°</strong>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- Overlay Labels on 3D Space -->
+    <div id="label-S" class="absolute pointer-events-none font-extrabold text-amber-300 bg-amber-950/90 border border-amber-400 px-2 py-0.5 rounded text-xs -translate-x-1/2 -translate-y-1/2 shadow-lg">S (Nguồn tới)</div>
+    <div id="label-I" class="absolute pointer-events-none font-extrabold text-red-300 bg-red-950/90 border border-red-400 px-2 py-0.5 rounded text-xs -translate-x-1/2 -translate-y-1/2 shadow-lg">I (Điểm tới)</div>
+    <div id="label-R" class="absolute pointer-events-none font-extrabold text-emerald-300 bg-emerald-950/90 border border-emerald-400 px-2 py-0.5 rounded text-xs -translate-x-1/2 -translate-y-1/2 shadow-lg">R (Tia phản xạ)</div>
+    <div id="label-N" class="absolute pointer-events-none font-extrabold text-indigo-300 bg-indigo-950/90 border border-indigo-400 px-2 py-0.5 rounded text-xs -translate-x-1/2 -translate-y-1/2 shadow-lg">N (Pháp tuyến)</div>
+
+    <div id="angle-overlay-i" class="absolute pointer-events-none font-extrabold text-indigo-200 bg-indigo-950/90 px-2.5 py-1 rounded-lg border border-indigo-400 text-xs transform -translate-x-1/2 -translate-y-1/2 shadow-xl">
+        i = 45.0°
+    </div>
+    <div id="angle-overlay-r" class="absolute pointer-events-none font-extrabold text-emerald-200 bg-emerald-950/90 px-2.5 py-1 rounded-lg border border-emerald-400 text-xs transform -translate-x-1/2 -translate-y-1/2 shadow-xl">
+        i' = 45.0°
+    </div>
+
+    <!-- Main Logic Script -->
+    <script>
+        // --- KA-TEX FORMULAS ---
+        window.addEventListener("load", () => {
+            if (window.katex) {
+                katex.render("i", document.getElementById('math-theta-i'));
+            }
+        });
+
+        // --- THREE.JS INITIALIZATION ---
+        const container = document.getElementById('canvas-container');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0f1d);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 7, 16);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        let controls;
+        if (THREE.OrbitControls) {
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.01;
+            controls.minDistance = 5;
+            controls.maxDistance = 30;
+        }
+
+        // --- LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // Grid Floor
+        const gridHelper = new THREE.GridHelper(30, 30, 0x1e293b, 0x0f172a);
+        gridHelper.position.y = -0.01;
+        scene.add(gridHelper);
+
+        // --- SCENE OBJECTS & GROUPS ---
+        const raysGroup = new THREE.Group();
+        const normalGroup = new THREE.Group();
+        const arcsGroup = new THREE.Group();
+        const protractorGroup = new THREE.Group();
+        scene.add(raysGroup);
+        scene.add(normalGroup);
+        scene.add(arcsGroup);
+        scene.add(protractorGroup);
+
+        // Mirror Surface (Gương phẳng)
+        const mirrorGeo = new THREE.BoxGeometry(16, 0.2, 10);
+        const mirrorMat = new THREE.MeshStandardMaterial({
+            color: 0x1e293b,
+            metalness: 0.9,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.95
+        });
+        const mirror = new THREE.Mesh(mirrorGeo, mirrorMat);
+        mirror.position.set(0, -0.1, 0);
+        scene.add(mirror);
+
+        // Laser Housing Box
+        const laserGeo = new THREE.CylinderGeometry(0.3, 0.35, 1.2, 16);
+        const laserMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 });
+        const laserMesh = new THREE.Mesh(laserGeo, laserMat);
+        const laserGroup = new THREE.Group();
+        laserGroup.add(laserMesh);
+        laserMesh.rotation.x = Math.PI / 2;
+        scene.add(laserGroup);
+
+        // Diffuse Rough Surface Overlay
+        const roughGeo = new THREE.PlaneGeometry(16, 10, 32, 32);
+        const posAttr = roughGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            posAttr.setZ(i, (Math.random() - 0.5) * 0.25);
+        }
+        roughGeo.computeVertexNormals();
+        const roughMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9, metalness: 0.1 });
+        const roughMesh = new THREE.Mesh(roughGeo, roughMat);
+        roughMesh.rotation.x = -Math.PI / 2;
+        roughMesh.position.set(0, 0.02, 0);
+        roughMesh.visible = false;
+        scene.add(roughMesh);
+
+        // --- SIMULATION STATE ---
+        const state = {
+            angleDeg: 45,
+            colorHex: '#ff3333',
+            isDiffuse: false,
+            rayCount: 1,
+            showNormal: true,
+            showLabels: true,
+            showAngles: true,
+            showProtractor: true
+        };
+
+        // --- HELPER FUNCTION: CREATE SOLID LIGHT BEAM ---
+        function createSolidRay(startPos, endPos, colorHex, radius = 0.07) {
+            const dir = new THREE.Vector3().subVectors(endPos, startPos);
+            const len = dir.length();
+            const cylinderGeo = new THREE.CylinderGeometry(radius, radius, len, 16);
+            const cylinderMat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(colorHex),
+                transparent: true,
+                opacity: 0.95
+            });
+            const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+            
+            const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+            cylinder.position.copy(midPoint);
+            
+            const up = new THREE.Vector3(0, 1, 0);
+            cylinder.quaternion.setFromUnitVectors(up, dir.clone().normalize());
+            return cylinder;
+        }
+
+        // --- HELPER FUNCTION: CREATE ARROW CONE ---
+        function createArrowHead(position, direction, colorHex) {
+            const coneGeo = new THREE.ConeGeometry(0.18, 0.45, 16);
+            const coneMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex) });
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            cone.position.copy(position);
+            
+            const up = new THREE.Vector3(0, 1, 0);
+            cone.quaternion.setFromUnitVectors(up, direction.clone().normalize());
+            return cone;
+        }
+
+        // --- HELPER FUNCTION: CREATE ANGLE ARC & SECTOR ---
+        function createAngleArcAndSector(startAngle, endAngle, radius, colorHex) {
+            const group = new THREE.Group();
+
+            // Arc Line
+            const curve = new THREE.EllipseCurve(0, 0, radius, radius, startAngle, endAngle, false, 0);
+            const points = curve.getPoints(50);
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, 0)));
+            const lineMat = new THREE.LineBasicMaterial({ color: colorHex, linewidth: 3 });
+            const arcLine = new THREE.Line(lineGeo, lineMat);
+            group.add(arcLine);
+
+            // Filled Semi-transparent Sector Area
+            const shape = new THREE.Shape();
+            shape.moveTo(0, 0);
+            shape.absarc(0, 0, radius, startAngle, endAngle, false);
+            shape.closePath();
+            const shapeGeo = new THREE.ShapeGeometry(shape);
+            const shapeMat = new THREE.MeshBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide
+            });
+            const sectorMesh = new THREE.Mesh(shapeGeo, shapeMat);
+            group.add(sectorMesh);
+
+            return group;
+        }
+
+        // --- BUILD PROTRACTOR (THƯỚC ĐO ĐỘ HÌNH BÁN CẦU) ---
+        function buildProtractor() {
+            protractorGroup.clear();
+            if (!state.showProtractor) return;
+
+            const radius = 4.5;
+            const group = new THREE.Group();
+
+            // Background Plate
+            const shape = new THREE.Shape();
+            shape.absarc(0, 0, radius, 0, Math.PI, false);
+            const shapeGeo = new THREE.ShapeGeometry(shape);
+            const shapeMat = new THREE.MeshBasicMaterial({
+                color: 0x020617,
+                transparent: true,
+                opacity: 0.75,
+                side: THREE.DoubleSide
+            });
+            const background = new THREE.Mesh(shapeGeo, shapeMat);
+            group.add(background);
+
+            // Outer Arc Line & Base Line
+            const curve = new THREE.EllipseCurve(0, 0, radius, radius, 0, Math.PI, false, 0);
+            const points = curve.getPoints(180);
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, 0)));
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 3 });
+            const arcLine = new THREE.Line(lineGeo, lineMat);
+            group.add(arcLine);
+
+            // Base horizontal line (0° to 180°)
+            const baseGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-radius, 0, 0),
+                new THREE.Vector3(radius, 0, 0)
+            ]);
+            group.add(new THREE.Line(baseGeo, lineMat));
+
+            // High-Definition Text Sprite Generator for Degree Numbers
+            function createDegreeSprite(text, highlight = false) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                
+                // Rounded background pill for maximum contrast and legibility
+                ctx.fillStyle = highlight ? 'rgba(30, 58, 138, 0.95)' : 'rgba(15, 23, 42, 0.9)';
+                ctx.strokeStyle = highlight ? '#38bdf8' : '#facc15';
+                ctx.lineWidth = 6;
+                
+                // Draw rounded rectangle badge
+                const x = 16, y = 16, w = 224, h = 96, r = 24;
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Text
+                ctx.fillStyle = highlight ? '#60a5fa' : '#fef08a';
+                ctx.font = 'bold 54px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, 128, 64);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.scale.set(1.1, 0.55, 1);
+                return sprite;
+            }
+
+            // Ticks & Numbers
+            for (let deg = 0; deg <= 180; deg += 5) {
+                const rad = (deg * Math.PI) / 180;
+                const isMajor = deg % 10 === 0;
+                const isHeading = deg % 15 === 0;
+                const tickLen = isHeading ? 0.55 : (isMajor ? 0.35 : 0.2);
+
+                // Tick marks
+                const tickGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(Math.cos(rad) * (radius - tickLen), Math.sin(rad) * (radius - tickLen), 0.01),
+                    new THREE.Vector3(Math.cos(rad) * radius, Math.sin(rad) * radius, 0.01)
+                ]);
+                const tickMat = new THREE.LineBasicMaterial({
+                    color: isHeading ? 0xfacc15 : (isMajor ? 0xffffff : 0x94a3b8),
+                    linewidth: isHeading ? 3 : 1
+                });
+                group.add(new THREE.Line(tickGeo, tickMat));
+
+                // Degree Numbers on Heading Ticks (Every 15°: 0°, 15°, 30°, 45°, 60°, 75°, 90°, 105°, 120°, 135°, 150°, 165°, 180°)
+                if (isHeading) {
+                    const numDist = radius - 1.1;
+                    const textSprite = createDegreeSprite(`${deg}°`, deg === 90);
+                    textSprite.position.set(Math.cos(rad) * numDist, Math.sin(rad) * numDist, 0.04);
+                    group.add(textSprite);
+                }
+            }
+
+            protractorGroup.add(group);
+        }
+
+        // Positions for HTML labels
+        let posS = new THREE.Vector3();
+        let posI = new THREE.Vector3(0, 0, 0);
+        let posR = new THREE.Vector3();
+        let posN = new THREE.Vector3(0, 6.3, 0);
+
+        // --- UPDATE SIMULATION RAYS & GRAPHICS ---
+        function updateSimulation() {
+            raysGroup.clear();
+            normalGroup.clear();
+            arcsGroup.clear();
+            buildProtractor();
+
+            const angleRad = (state.angleDeg * Math.PI) / 180;
+            const rayLength = 8.5;
+            const color = state.colorHex;
+
+            if (roughMesh) roughMesh.visible = state.isDiffuse;
+
+            // 1. Pháp tuyến IN (Dashed Normal Line)
+            if (state.showNormal) {
+                const normalGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 6, 0)
+                ]);
+                const normalMat = new THREE.LineDashedMaterial({
+                    color: 0xc084fc,
+                    dashSize: 0.3,
+                    gapSize: 0.2,
+                    linewidth: 2
+                });
+                const normalLine = new THREE.Line(normalGeo, normalMat);
+                normalLine.computeLineDistances();
+                normalGroup.add(normalLine);
+            }
+
+            // Ray Spacing
+            const count = state.rayCount;
+            const offsetStep = count > 1 ? 1.0 / (count - 1) : 0;
+            const startOffset = count > 1 ? -0.5 : 0;
+
+            for (let i = 0; i < count; i++) {
+                const zOffset = startOffset + i * offsetStep;
+
+                // Position calculation
+                const posX = -Math.sin(angleRad) * rayLength;
+                const posY = Math.cos(angleRad) * rayLength;
+                const origin = new THREE.Vector3(posX, posY, zOffset);
+                const hitPoint = new THREE.Vector3(0, 0, zOffset);
+
+                if (i === Math.floor(count / 2)) {
+                    posS.copy(origin);
+                    posI.copy(hitPoint);
+                    laserGroup.position.copy(origin);
+                    laserGroup.lookAt(hitPoint);
+                    laserGroup.rotateY(Math.PI);
+                }
+
+                // --- TIA SÁNG TỚI SI (NÉT LIỀN + MŨI TÊN CHỈ HƯỚNG) ---
+                const incRayMesh = createSolidRay(origin, hitPoint, color);
+                raysGroup.add(incRayMesh);
+
+                // Arrow pointing towards I
+                const incDir = new THREE.Vector3().subVectors(hitPoint, origin);
+                const incMid = new THREE.Vector3().addVectors(origin, hitPoint).multiplyScalar(0.5);
+                const incArrow = createArrowHead(incMid, incDir, color);
+                raysGroup.add(incArrow);
+
+                // Điểm tới I Glow Dot
+                const dotGeo = new THREE.SphereGeometry(0.14, 16, 16);
+                const dotMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+                const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+                dotMesh.position.copy(hitPoint);
+                raysGroup.add(dotMesh);
+
+                // --- TIA SÁNG PHẢN XẠ IR (NÉT LIỀN + MŨI TÊN CHỈ HƯỚNG) ---
+                if (!state.isDiffuse) {
+                    const refX = Math.sin(angleRad) * rayLength;
+                    const refY = Math.cos(angleRad) * rayLength;
+                    const refTarget = new THREE.Vector3(refX, refY, zOffset);
+
+                    if (i === Math.floor(count / 2)) {
+                        posR.copy(refTarget);
+                    }
+
+                    const refRayMesh = createSolidRay(hitPoint, refTarget, color);
+                    raysGroup.add(refRayMesh);
+
+                    // Arrow pointing away from I
+                    const refDir = new THREE.Vector3().subVectors(refTarget, hitPoint);
+                    const refMid = new THREE.Vector3().addVectors(hitPoint, refTarget).multiplyScalar(0.5);
+                    const refArrow = createArrowHead(refMid, refDir, color);
+                    raysGroup.add(refArrow);
+                } else {
+                    const scatterCount = 5;
+                    const spreadAngles = [-0.6, -0.3, 0, 0.3, 0.6];
+                    spreadAngles.forEach(offsetAngle => {
+                        const scatAngle = angleRad + offsetAngle;
+                        const scatX = Math.sin(scatAngle) * (rayLength * 0.7);
+                        const scatY = Math.cos(scatAngle) * (rayLength * 0.7);
+                        const scatTarget = new THREE.Vector3(scatX, scatY, zOffset + (Math.random() - 0.5) * 2);
+
+                        const scatRayMesh = createSolidRay(hitPoint, scatTarget, color, 0.03);
+                        raysGroup.add(scatRayMesh);
+                    });
+                }
+            }
+
+            // --- VÒNG CUNG & TÔ MÀU VÙNG GÓC (GÓC i VÀ GÓC i') ---
+            if (state.showAngles && state.angleDeg > 1) {
+                const arcRadius = 2.8;
+                
+                // Góc tới i (giữa pháp tuyến IN và tia tới SI)
+                const arcI = createAngleArcAndSector(Math.PI / 2, Math.PI / 2 + angleRad, arcRadius, 0x6366f1);
+                arcsGroup.add(arcI);
+
+                // Góc phản xạ i' (giữa pháp tuyến IN và tia phản xạ IR)
+                if (!state.isDiffuse) {
+                    const arcR = createAngleArcAndSector(Math.PI / 2 - angleRad, Math.PI / 2, arcRadius, 0x10b981);
+                    arcsGroup.add(arcR);
+                }
+            }
+
+            // Update UI Card Text
+            document.getElementById('angle-value').textContent = `${state.angleDeg.toFixed(1)}°`;
+            document.getElementById('info-i').textContent = `${state.angleDeg.toFixed(1)}°`;
+            document.getElementById('info-r').textContent = state.isDiffuse ? 'Tản xạ' : `${state.angleDeg.toFixed(1)}°`;
+        }
+
+        updateSimulation();
+
+        // --- UPDATE 2D OVERLAY LABELS (S, I, R, N, góc i, góc i') ---
+        const labelS = document.getElementById('label-S');
+        const labelI = document.getElementById('label-I');
+        const labelR = document.getElementById('label-R');
+        const labelN = document.getElementById('label-N');
+        const overlayI = document.getElementById('angle-overlay-i');
+        const overlayR = document.getElementById('angle-overlay-r');
+
+        function updateElementPos(elem, pos3D) {
+            const p = pos3D.clone().project(camera);
+            const x = (p.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-(p.y * 0.5) + 0.5) * window.innerHeight;
+            elem.style.left = `${x}px`;
+            elem.style.top = `${y}px`;
+            elem.style.opacity = (p.z < 1 && state.showLabels) ? '1' : '0';
+        }
+
+        function updateLabelsPosition() {
+            // S, I, R, N Labels
+            if (state.showLabels) {
+                updateElementPos(labelS, posS);
+                updateElementPos(labelI, posI);
+                updateElementPos(labelN, posN);
+                if (!state.isDiffuse) {
+                    updateElementPos(labelR, posR);
+                } else {
+                    labelR.style.opacity = '0';
+                }
+            } else {
+                labelS.style.opacity = '0';
+                labelI.style.opacity = '0';
+                labelR.style.opacity = '0';
+                labelN.style.opacity = '0';
+            }
+
+            // Angle values text
+            if (!state.showAngles) {
+                overlayI.style.opacity = '0';
+                overlayR.style.opacity = '0';
+                return;
+            }
+
+            const angleRad = (state.angleDeg * Math.PI) / 180;
+            const midDist = 3.2;
+
+            // Incident Angle Label i = SIN
+            const incPos = new THREE.Vector3(
+                -Math.sin(angleRad / 2) * midDist,
+                Math.cos(angleRad / 2) * midDist,
+                0
+            );
+            incPos.project(camera);
+            overlayI.style.left = `${(incPos.x * 0.5 + 0.5) * window.innerWidth}px`;
+            overlayI.style.top = `${(-(incPos.y * 0.5) + 0.5) * window.innerHeight}px`;
+            overlayI.style.opacity = incPos.z < 1 ? '1' : '0';
+            overlayI.textContent = `i = ${state.angleDeg.toFixed(1)}°`;
+
+            // Reflected Angle Label i' = NIR
+            if (!state.isDiffuse) {
+                const refPos = new THREE.Vector3(
+                    Math.sin(angleRad / 2) * midDist,
+                    Math.cos(angleRad / 2) * midDist,
+                    0
+                );
+                refPos.project(camera);
+                overlayR.style.left = `${(refPos.x * 0.5 + 0.5) * window.innerWidth}px`;
+                overlayR.style.top = `${(-(refPos.y * 0.5) + 0.5) * window.innerHeight}px`;
+                overlayR.style.opacity = refPos.z < 1 ? '1' : '0';
+                overlayR.textContent = `i' = ${state.angleDeg.toFixed(1)}°`;
+            } else {
+                overlayR.style.opacity = '0';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('angle-slider').addEventListener('input', (e) => {
+            state.angleDeg = parseFloat(e.target.value);
+            updateSimulation();
+        });
+
+        document.getElementById('chk-labels').addEventListener('change', (e) => {
+            state.showLabels = e.target.checked;
+            updateSimulation();
+        });
+
+        document.getElementById('ray-count').addEventListener('input', (e) => {
+            state.rayCount = parseInt(e.target.value);
+            document.getElementById('ray-count-val').textContent = state.rayCount;
+            updateSimulation();
+        });
+
+        // Color selection
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.replace('border-white', 'border-transparent'));
+                btn.classList.replace('border-transparent', 'border-white');
+                state.colorHex = btn.getAttribute('data-color');
+                updateSimulation();
+            });
+        });
+
+        // Reflection mode selection
+        const btnSpecular = document.getElementById('btn-specular');
+        const btnDiffuse = document.getElementById('btn-diffuse');
+
+        btnSpecular.addEventListener('click', () => {
+            state.isDiffuse = false;
+            btnSpecular.className = "py-2 px-2 text-xs font-medium rounded-lg bg-indigo-600 text-white border border-indigo-400 transition";
+            btnDiffuse.className = "py-2 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 border border-slate-700 transition hover:bg-slate-700";
+            updateSimulation();
+        });
+
+        btnDiffuse.addEventListener('click', () => {
+            state.isDiffuse = true;
+            btnDiffuse.className = "py-2 px-2 text-xs font-medium rounded-lg bg-indigo-600 text-white border border-indigo-400 transition";
+            btnSpecular.className = "py-2 px-2 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 border border-slate-700 transition hover:bg-slate-700";
+            updateSimulation();
+        });
+
+        // Toggles
+        document.getElementById('chk-normal').addEventListener('change', (e) => {
+            state.showNormal = e.target.checked;
+            updateSimulation();
+        });
+
+        document.getElementById('chk-angles').addEventListener('change', (e) => {
+            state.showAngles = e.target.checked;
+            updateSimulation();
+        });
+
+        document.getElementById('chk-protractor').addEventListener('change', (e) => {
+            state.showProtractor = e.target.checked;
+            updateSimulation();
+        });
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            updateLabelsPosition();
+            renderer.render(scene, camera);
+        }
+
+        // Start animation loop on window load
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
